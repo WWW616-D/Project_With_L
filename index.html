@@ -1,56 +1,307 @@
 ﻿<!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>加法计算器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>室友匹配平台</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 450px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+            font-size: 28px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+        .tab.inactive {
+            background: #f0f0f0;
+            color: #666;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+        button[type="submit"]:hover {
+            background: #5a67d8;
+        }
+        .message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .message.error {
+            background: #fee;
+            color: #c33;
+        }
+        .message.success {
+            background: #efe;
+            color: #3a6;
+        }
+        .auth-status {
+            text-align: center;
+            padding: 12px;
+            background: #e8f0fe;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .logout-btn {
+            background: #dc2626;
+            margin-top: 10px;
+        }
+        .logout-btn:hover {
+            background: #b91c1c;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <h1>网页加法计算器</h1>
-    
-    <input type="number" id="num1" placeholder="第一个数字">
-    +
-    <input type="number" id="num2" placeholder="第二个数字">
-    
-    <button onclick="calculate()">计算</button>
-    
-    <p>结果：<span id="result">等待计算</span></p>
+    <div class="container" id="app">
+        <h1>🏠 室友匹配平台</h1>
+        
+        <div id="unloggedView">
+            <div class="tabs">
+                <button class="tab active" id="loginTab">登录</button>
+                <button class="tab inactive" id="signupTab">注册</button>
+            </div>
+
+            <div id="loginForm">
+                <div class="form-group">
+                    <label>📧 邮箱</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>🔒 密码</label>
+                    <input type="password" id="loginPassword" placeholder="至少6位">
+                </div>
+                <button type="submit" id="doLoginBtn">登录</button>
+            </div>
+
+            <div id="signupForm" style="display: none;">
+                <div class="form-group">
+                    <label>📧 邮箱</label>
+                    <input type="email" id="signupEmail" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>🔒 密码</label>
+                    <input type="password" id="signupPassword" placeholder="至少6位">
+                </div>
+                <button type="submit" id="doSignupBtn">注册</button>
+            </div>
+            <div id="authMessage"></div>
+        </div>
+
+        <div id="loggedView" class="hidden">
+            <div class="auth-status">
+                ✅ 已登录<br>
+                <span id="userEmail"></span>
+            </div>
+            <p style="text-align: center; margin: 20px 0; color: #666;">
+                这里是匹配功能<br>
+                （即将上线）
+            </p>
+            <button class="logout-btn" id="logoutBtn">退出登录</button>
+        </div>
+    </div>
 
     <script>
-        // 改成你的 PythonAnywhere 地址
-        const BACKEND = 'https://WWW616.pythonanywhere.com';
+        const SUPABASE_URL = 'https://vmxaqdbolwswdsozfnvh.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_lkam_YzMEIYt9R9lTS5X6w_8WN6fzTJ';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        async function calculate() {
-            // 获取用户输入
-            const a = parseFloat(document.getElementById('num1').value);
-            const b = parseFloat(document.getElementById('num2').value);
+        const unloggedView = document.getElementById('unloggedView');
+        const loggedView = document.getElementById('loggedView');
+        const userEmailSpan = document.getElementById('userEmail');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const loginTab = document.getElementById('loginTab');
+        const signupTab = document.getElementById('signupTab');
+        const authMessageDiv = document.getElementById('authMessage');
+
+        function showMessage(msg, type) {
+            authMessageDiv.innerHTML = `<div class="message ${type}">${msg}</div>`;
+            setTimeout(() => {
+                authMessageDiv.innerHTML = '';
+            }, 3000);
+        }
+
+        loginTab.onclick = () => {
+            loginForm.style.display = 'block';
+            signupForm.style.display = 'none';
+            loginTab.className = 'tab active';
+            signupTab.className = 'tab inactive';
+        };
+        
+        signupTab.onclick = () => {
+            loginForm.style.display = 'none';
+            signupForm.style.display = 'block';
+            signupTab.className = 'tab active';
+            loginTab.className = 'tab inactive';
+        };
+
+        document.getElementById('doSignupBtn').onclick = async () => {
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
             
-            // 检查输入是否有效
-            if (isNaN(a) || isNaN(b)) {
-                document.getElementById('result').textContent = '请输入有效数字';
+            if (!email || !password) {
+                showMessage('请填写邮箱和密码', 'error');
                 return;
             }
+            if (password.length < 6) {
+                showMessage('密码至少6位', 'error');
+                return;
+            }
+
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password
+            });
+
+            if (error) {
+                showMessage(error.message, 'error');
+            } else {
+                showMessage('注册成功！请查收验证邮件（如有），然后登录', 'success');
+                loginTab.click();
+                document.getElementById('loginEmail').value = email;
+                document.getElementById('loginPassword').value = '';
+            }
+        };
+
+        document.getElementById('doLoginBtn').onclick = async () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
             
-            // 显示"计算中..."
-            document.getElementById('result').textContent = '计算中...';
-            
-            try {
-                // 发送请求到 PythonAnywhere
-                const response = await fetch(`${BACKEND}/api/add`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ a: a, b: b })
-                });
-                
-                const data = await response.json();
-                document.getElementById('result').textContent = data.result;
-                
-            } catch (error) {
-                console.error('错误:', error);
-                document.getElementById('result').textContent = '连接后端失败';
+            if (!email || !password) {
+                showMessage('请填写邮箱和密码', 'error');
+                return;
+            }
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+
+            if (error) {
+                showMessage('登录失败：' + error.message, 'error');
+            } else {
+                showMessage('登录成功！', 'success');
+                updateUIForLoggedIn(data.user);
+            }
+        };
+
+        document.getElementById('logoutBtn').onclick = async () => {
+            await supabaseClient.auth.signOut();
+            updateUIForLoggedOut();
+            showMessage('已退出登录', 'success');
+        };
+
+        function updateUIForLoggedIn(user) {
+            unloggedView.classList.add('hidden');
+            loggedView.classList.remove('hidden');
+            userEmailSpan.textContent = user.email;
+        }
+
+        function updateUIForLoggedOut() {
+            unloggedView.classList.remove('hidden');
+            loggedView.classList.add('hidden');
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('signupEmail').value = '';
+            document.getElementById('signupPassword').value = '';
+        }
+
+        async function checkSession() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                updateUIForLoggedIn(session.user);
+            } else {
+                updateUIForLoggedOut();
             }
         }
+        
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                updateUIForLoggedIn(session.user);
+            } else {
+                updateUIForLoggedOut();
+            }
+        });
+
+        checkSession();
     </script>
 </body>
 </html>
